@@ -1,180 +1,1404 @@
-import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
-import { Heart, Droplets, Clock, Award, ArrowRight, CheckCircle } from "lucide-react";
-import DashboardLayout, { PageHeader } from "../../components/layout/DashboardLayout";
-import { StatCard } from "../../components/ui/Card";
-import { UrgencyBadge } from "../../components/ui/Badge";
-import { useApp } from "../../context/AppContext";
+import React, { useEffect, useMemo, useState } from "react"
+
+import { motion } from "framer-motion"
+
+import { Link } from "react-router-dom"
+
+import {
+  Activity,
+  ArrowRight,
+  Award,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  CircleHelp,
+  Clock3,
+  Droplet,
+  Heart,
+  MapPin,
+  Navigation,
+  Search,
+  ShieldCheck,
+  UsersRound,
+  X,
+} from "lucide-react"
+
+import DashboardLayout from "../../components/layout/DashboardLayout"
+import DonorImpactChart from "../../components/donor/DonorImpactChart"
+
+import {
+  demoDonationHistory,
+  distanceByArea,
+  donorRewards,
+  urgencyLabel,
+} from "../../data/donorDashboardData"
+
+import type { BloodGroup, BloodRequest, Urgency } from "../../data/mockData"
+
+import { useApp } from "../../context/AppContext"
+import { useDonorPortal } from "../../context/DonorPortalContext"
+
+const bloodGroups: BloodGroup[] = [
+  "O+",
+  "O-",
+  "A+",
+  "A-",
+  "B+",
+  "B-",
+  "AB+",
+  "AB-",
+]
+
+const activeStatuses = new Set([
+  "Verified",
+  "Matching",
+  "Donors Contacted",
+  "Donor Confirmed",
+  "Hospital Confirmation",
+])
+
+function formatDate(value?: string | null) {
+  if (!value || value === "Not recorded") return "Not recorded"
+
+  const date = new Date(value)
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+}
+
+function urgencyTone(urgency: Urgency) {
+  if (urgency === "CRITICAL") return "border-red-200 bg-red-50 text-red-700"
+
+  if (urgency === "URGENT") return "border-amber-200 bg-amber-50 text-amber-800"
+
+  return "border-emerald-200 bg-emerald-50 text-emerald-700"
+}
+
+function SectionHeading({
+  title,
+
+  subtitle,
+
+  to,
+
+  linkLabel = "View all",
+}: {
+  title: string
+
+  subtitle?: string
+
+  to?: string
+
+  linkLabel?: string
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 className="font-display text-lg font-bold text-[#021734]">
+          {title}
+        </h2>
+        {subtitle && <p className="mt-1 text-xs text-[#617587]">{subtitle}</p>}
+      </div>
+      {to && (
+        <Link
+          to={to}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-[#E51C3D] hover:underline"
+        >
+          {linkLabel}
+          <ArrowRight size={13} />
+        </Link>
+      )}
+    </div>
+  )
+}
+
+function StatTile({
+  label,
+
+  value,
+
+  note,
+
+  icon: Icon,
+
+  tone = "red",
+}: {
+  label: string
+
+  value: string | number
+
+  note: string
+
+  icon: typeof Droplet
+
+  tone?: "red" | "green" | "navy" | "amber"
+}) {
+  const tones = {
+    red: "bg-[#FFF1F3] text-[#E51C3D]",
+
+    green: "bg-[#ECFDF3] text-[#16A34A]",
+
+    navy: "bg-[#EAF0F5] text-[#062847]",
+
+    amber: "bg-amber-50 text-amber-600",
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.2 }}
+      className="rounded-2xl border border-[#D8E3EA] bg-white p-4 shadow-[0_4px_18px_rgba(3,26,54,0.05)] transition-shadow hover:shadow-[0_8px_22px_rgba(3,26,54,0.08)]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#617587]">
+            {label}
+          </p>
+          <p className="mt-2 truncate font-display text-2xl font-extrabold text-[#021734]">
+            {value}
+          </p>
+        </div>
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tones[tone]}`}
+        >
+          <Icon size={17} />
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-[#617587]">{note}</p>
+    </motion.div>
+  )
+}
+
+function ModalShell({
+  title,
+
+  description,
+
+  onClose,
+
+  children,
+}: {
+  title: string
+
+  description: string
+
+  onClose: () => void
+
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#031A36]/45 p-4 backdrop-blur-[2px]"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="donor-modal-title"
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        className="w-full max-w-md rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-xl"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2
+              id="donor-modal-title"
+              className="font-display text-lg font-bold text-[#021734]"
+            >
+              {title}
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed text-[#617587]">
+              {description}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="rounded-lg p-1.5 text-[#617587] hover:bg-[#F5F8FA] focus-visible:outline-2 focus-visible:outline-[#E51C3D]"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="mt-5">{children}</div>
+      </motion.div>
+    </div>
+  )
+}
+
+function RequestCard({
+  request,
+
+  responded,
+
+  onDetails,
+
+  onHelp,
+
+  onDecline,
+}: {
+  request: BloodRequest
+
+  responded: boolean
+
+  onDetails: (request: BloodRequest) => void
+
+  onHelp: (request: BloodRequest) => void
+
+  onDecline: (requestId: string) => void
+}) {
+  return (
+    <article
+      className={`rounded-xl border bg-white p-4 shadow-[0_2px_8px_rgba(3,26,54,0.035)] ${
+        request.urgency === "CRITICAL" ? "border-red-200" : "border-[#D8E3EA]"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FFF1F3] text-[#E51C3D]">
+            <Droplet size={19} fill="currentColor" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${urgencyTone(request.urgency)}`}
+              >
+                {urgencyLabel[request.urgency]}
+              </span>
+              {request.verifiedBy && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#16A34A]">
+                  <ShieldCheck size={12} /> Verified
+                </span>
+              )}
+            </div>
+            <h3 className="mt-2 font-display text-base font-bold text-[#021734]">
+              {request.bloodGroup} blood required
+            </h3>
+            <p className="mt-0.5 text-xs text-[#617587]">
+              {request.hospitalName} · {request.area}
+            </p>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-md bg-[#F5F8FA] px-2 py-1 text-xs font-semibold text-[#062847]">
+          {request.units} {request.units === 1 ? "unit" : "units"}
+        </span>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#617587]">
+        <span className="inline-flex items-center gap-1">
+          <MapPin size={13} />
+          {distanceByArea[request.area] ?? "Nearby"}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Clock3 size={13} />
+          {request.status}
+        </span>
+      </div>
+      {responded ? (
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#ECFDF3] px-3 py-2.5 text-xs font-semibold text-[#16803C]">
+          <CheckCircle2 size={15} /> Response sent — the verified team has been
+          notified.
+        </div>
+      ) : (
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={() => onHelp(request)}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#E51C3D] px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#C91836] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E51C3D]"
+          >
+            <Heart size={14} /> I can help
+          </button>
+          <button
+            onClick={() => onDecline(request.id)}
+            className="rounded-lg border border-[#D8E3EA] px-3 py-2.5 text-xs font-semibold text-[#617587] hover:bg-[#F5F8FA] focus-visible:outline-2 focus-visible:outline-[#E51C3D]"
+          >
+            Not available
+          </button>
+          <button
+            onClick={() => onDetails(request)}
+            aria-label={`View details for ${request.hospitalName}`}
+            className="rounded-lg border border-[#D8E3EA] p-2.5 text-[#062847] hover:bg-[#F5F8FA] focus-visible:outline-2 focus-visible:outline-[#E51C3D]"
+          >
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function NearbyMap({ location }: { location: string }) {
+  return (
+    <div
+      className="relative h-48 overflow-hidden rounded-xl border border-[#D8E3EA] bg-[#F0F6F8]"
+      role="img"
+      aria-label={`Illustrative nearby network map for ${location}`}
+    >
+      <div className="absolute inset-0 opacity-70" aria-hidden="true">
+        <svg viewBox="0 0 360 190" className="h-full w-full">
+          <path
+            d="M-10 135 C60 100 90 160 145 118 S245 45 370 76"
+            fill="none"
+            stroke="#CAD8E0"
+            strokeWidth="18"
+          />
+          <path
+            d="M42 -10 C75 48 130 65 113 116 S154 163 165 205"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="8"
+          />
+          <path
+            d="M235 -10 C214 50 263 89 221 122 S234 168 260 205"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="7"
+          />
+          <path
+            d="M-10 57 C65 75 94 34 170 61 S273 110 370 106"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="6"
+          />
+        </svg>
+      </div>
+      <span
+        className="absolute left-[46%] top-[43%] z-10 flex h-9 w-9 items-center justify-center rounded-full border-4 border-white bg-[#031A36] text-white shadow-md"
+        title="Your approximate area"
+      >
+        <Navigation size={14} fill="white" />
+      </span>
+      <span
+        className="absolute left-[19%] top-[29%] flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#E51C3D] text-white shadow"
+        title="Request location"
+      >
+        <Droplet size={12} fill="white" />
+      </span>
+      <span
+        className="absolute right-[19%] top-[54%] flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#16A34A] text-white shadow"
+        title="Verified hospital"
+      >
+        <ShieldCheck size={12} />
+      </span>
+      <span
+        className="absolute left-[62%] top-[18%] flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#E51C3D] text-white shadow"
+        title="Request location"
+      >
+        <Droplet size={12} fill="white" />
+      </span>
+      <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between rounded-lg bg-white/95 px-3 py-2 text-[10px] text-[#617587] shadow-sm">
+        <span className="font-semibold text-[#021734]">
+          {location || "Your area"} · Network preview
+        </span>
+        <span className="flex items-center gap-2">
+          <i className="h-2 w-2 rounded-full bg-[#E51C3D]" />
+          Requests <i className="h-2 w-2 rounded-full bg-[#16A34A]" />
+          Verified
+        </span>
+      </div>
+    </div>
+  )
+}
 
 export default function DonorDashboard() {
-  const { donors, requests, currentUser, donorAvailability, toggleDonorAvailability, updateRequestStatus } = useApp();
-  const donorRecord = donors.find((d) => d.id === currentUser?.id);
-  const me = donorRecord ?? (currentUser ? {
-    id: currentUser.id,
-    name: currentUser.name,
-    bloodGroup: "Not available",
-    area: "",
-    city: "",
-    status: "Inactive" as const,
-    available: donorAvailability ?? false,
-    lastDonation: "Not recorded",
-    donationsCount: 0,
-    phone: "",
-    matchScore: 0,
-    contactedBy: [],
-  } : null);
-  const [responded, setResponded] = React.useState<string[]>([]);
+  const {
+    donors,
 
-  const relevantRequests = requests.filter((r) =>
-    ["Donors Contacted", "Verified", "Matching"].includes(r.status) &&
-    r.matchedDonors?.includes(currentUser?.id ?? "")
-  );
+    requests,
 
-  const handleAccept = (reqId: string) => {
-    setResponded((r) => [...r, reqId]);
-    updateRequestStatus(reqId, "Donor Confirmed");
-  };
+    currentUser,
 
-  const available = donorRecord ? donorAvailability ?? donorRecord.available : donorAvailability ?? false;
+    roleDetails,
 
-  if (!me) return null;
+    donorAvailability,
+
+    toggleDonorAvailability,
+
+    updateRequestStatus,
+  } = useApp()
+  const donorPortal = useDonorPortal()
+
+  const [availabilityOpen, setAvailabilityOpen] = useState(false)
+
+  const [availabilityMode, setAvailabilityMode] =
+    useState<"available" | "temporary" | "unavailable">(
+      donorPortal.availabilityStatus ??
+        (donorPortal.available === false ? "unavailable" : "available"),
+    )
+
+  const [savedUntil, setSavedUntil] = useState(donorPortal.availabilityUntil)
+
+  const [selectedRequest, setSelectedRequest] = useState<BloodRequest | null>(
+    null,
+  )
+
+  const [confirmRequest, setConfirmRequest] = useState<BloodRequest | null>(
+    null,
+  )
+
+  const [availabilityChoice, setAvailabilityChoice] =
+    useState<"available" | "temporary" | "unavailable">("available")
+
+  const [declinedIds, setDeclinedIds] = useState<string[]>([])
+
+  const [bloodFilter, setBloodFilter] = useState("All blood groups")
+
+  const [urgencyFilter, setUrgencyFilter] = useState("All urgency")
+
+  const [nearbyQuery, setNearbyQuery] = useState("")
+
+  const [toast, setToast] = useState("")
+
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (donorPortal.availabilityStatus)
+      setAvailabilityMode(donorPortal.availabilityStatus)
+    else if (donorPortal.available === false) setAvailabilityMode("unavailable")
+    else if (donorPortal.available === true) setAvailabilityMode("available")
+
+    setSavedUntil(donorPortal.availabilityUntil)
+  }, [
+    donorPortal.availabilityStatus,
+    donorPortal.availabilityUntil,
+    donorPortal.available,
+  ])
+
+  const donorRecord = donors.find((donor) => donor.id === currentUser?.id)
+
+  const donorName = donorPortal.profile.name ?? currentUser?.name ?? "Donor"
+
+  const profileBloodGroup = roleDetails?.blood_group
+
+  const bloodGroup =
+    donorPortal.profile.bloodGroup ??
+    (typeof profileBloodGroup === "string" &&
+    bloodGroups.includes(profileBloodGroup as BloodGroup)
+      ? profileBloodGroup
+      : donorRecord?.bloodGroup) ??
+    "Not set"
+
+  const city =
+    donorPortal.profile.city ??
+    String(roleDetails?.city ?? donorRecord?.city ?? "")
+
+  const area = donorRecord?.area ?? ""
+
+  const available =
+    donorPortal.available ??
+    donorAvailability ??
+    donorRecord?.available ??
+    false
+  const donationCount =
+    donorRecord?.donationsCount ??
+    (Number(roleDetails?.donations_count ?? 0) || 0)
+
+  const lastDonation =
+    donorRecord?.lastDonation ??
+    String(roleDetails?.last_donation_date ?? "Not recorded")
+
+  const hasBloodGroup = bloodGroups.includes(bloodGroup as BloodGroup)
+
+  const matchingRequests = useMemo(
+    () =>
+      requests.filter(
+        (request) =>
+          hasBloodGroup &&
+          request.bloodGroup === bloodGroup &&
+          activeStatuses.has(request.status) &&
+          request.status !== "Fulfilled" &&
+          !declinedIds.includes(request.id),
+      ),
+    [bloodGroup, declinedIds, hasBloodGroup, requests],
+  )
+
+  const filteredRequests = matchingRequests.filter(
+    (request) =>
+      (bloodFilter === "All blood groups" ||
+        request.bloodGroup === bloodFilter) &&
+      (urgencyFilter === "All urgency" ||
+        urgencyLabel[request.urgency] === urgencyFilter),
+  )
+
+  const nearbyRequests = requests
+    .filter(
+      (request) =>
+        hasBloodGroup &&
+        request.bloodGroup === bloodGroup &&
+        activeStatuses.has(request.status) &&
+        request.status !== "Fulfilled" &&
+        `${request.hospitalName} ${request.area}`
+          .toLowerCase()
+          .includes(nearbyQuery.toLowerCase()),
+    )
+    .slice(0, 4)
+
+  const responses = requests.filter(
+    (request) =>
+      donorPortal.responses.some(
+        (response) =>
+          response.requestId === request.id && response.status !== "Cancelled",
+      ) ||
+      request.confirmedDonor === currentUser?.id ||
+      (request.matchedDonors?.includes(currentUser?.id ?? "") &&
+        request.status === "Donor Confirmed"),
+  )
+  const respondedIds = donorPortal.responses
+    .filter((response) => response.status !== "Cancelled")
+    .map((response) => response.requestId)
+
+  const communityDonors = donors.filter(
+    (donor) => donor.bloodGroup === bloodGroup && donor.id !== currentUser?.id,
+  )
+
+  const communityAvailable = communityDonors.filter(
+    (donor) => donor.available,
+  ).length
+
+  const communityUnavailable = communityDonors.length - communityAvailable
+
+  const networkAvailability = communityDonors.length
+    ? Math.round((communityAvailable / communityDonors.length) * 100)
+    : 0
+
+  const reachedEstimate = donationCount * 3
+
+  const openAvailability = () => {
+    const currentChoice =
+      donorPortal.availabilityStatus ??
+      (available ? "available" : availabilityMode)
+
+    setAvailabilityChoice(currentChoice)
+    setSavedUntil(donorPortal.availabilityUntil)
+
+    setAvailabilityOpen(true)
+  }
+
+  const saveAvailability = () => {
+    const nextAvailable = availabilityChoice === "available"
+
+    if (nextAvailable !== available && currentUser)
+      toggleDonorAvailability(currentUser.id)
+
+    setAvailabilityMode(availabilityChoice)
+    donorPortal.setAvailability(nextAvailable, savedUntil, availabilityChoice)
+
+    setAvailabilityOpen(false)
+  }
+
+  const confirmResponse = () => {
+    if (!confirmRequest) return
+
+    updateRequestStatus(confirmRequest.id, "Donor Confirmed")
+    donorPortal.recordResponse(confirmRequest.id)
+
+    setToast("Your response was sent to the hospital.")
+    window.setTimeout(() => setToast(""), 3500)
+
+    setConfirmRequest(null)
+  }
+
+  if (!currentUser) return null
 
   return (
     <DashboardLayout>
-      <PageHeader
-        title={`Hello, ${me.name}`}
-        subtitle="Your dashboard — availability, requests, and impact."
-      />
-
-      {/* Availability toggle */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={`rounded-xl p-5 mb-6 flex items-center justify-between gap-4 ${available ? "bg-[#021734]" : "bg-[#F0F6F8] border border-[#C0D2DE]/60"}`}
-      >
-        <div>
-          <p className={`font-semibold ${available ? "text-white" : "text-[#021734]"}`}>
-            {available ? "You are currently available." : "You are currently unavailable."}
-          </p>
-          <p className={`text-xs mt-1 ${available ? "text-white/50" : "text-[#021734]/50"}`}>
-            {available ? "You will be matched with compatible requests in your area." : "You won't be matched until you toggle availability back on."}
-          </p>
-        </div>
-        <button
-          onClick={() => currentUser && toggleDonorAvailability(currentUser.id)}
-          className={`relative w-14 h-7 rounded-full transition-all duration-300 flex-shrink-0 ${available ? "bg-[#1C8791]" : "bg-[#CECFD3]"}`}
-        >
-          <motion.div
-            layout
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            className="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow"
-            style={{ left: available ? "calc(100% - 1.75rem)" : "0.125rem" }}
-          />
-        </button>
-      </motion.div>
-
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-          <StatCard label="Total Donations" value={me.donationsCount} sub="Lifetime contributions" icon={<Droplets size={18} />} />
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <StatCard label="Blood Group" value={me.bloodGroup} sub="Universal donor compatible" icon={<Heart size={18} />} />
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <StatCard label="Last Donation" value={me.lastDonation === "Not recorded" ? "Not available" : me.lastDonation} sub="90-day interval respected" icon={<Clock size={18} />} />
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <StatCard label="Match Score" value={`${me.matchScore}%`} sub="Coordination score only" icon={<Award size={18} />} accent="bg-[#036D7D]/10 text-[#036D7D]" />
-        </motion.div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Matching Requests */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-display font-bold text-[#021734]">Requests Matching You</h2>
-            <Link to="/donor/requests" className="text-xs text-[#036D7D] hover:underline flex items-center gap-1">
-              View all <ArrowRight size={12} />
-            </Link>
-          </div>
-          {relevantRequests.length === 0 ? (
-            <div className="bg-white rounded-xl border border-[#C0D2DE]/60 p-8 text-center">
-              <Droplets size={28} className="text-[#C0D2DE] mx-auto mb-3" />
-              <p className="text-sm text-[#021734]/50">No matching requests right now.</p>
-              <p className="text-xs text-[#021734]/30 mt-1">You'll be notified when a compatible request arrives.</p>
-            </div>
-          ) : relevantRequests.map((req, i) => (
-            <motion.div key={req.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }}
-              className={`bg-white rounded-xl border p-4 mb-3 ${req.urgency === "CRITICAL" ? "border-red-200 bg-red-50/20" : "border-[#C0D2DE]/60"}`}>
-              <div className="flex items-start gap-3 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <UrgencyBadge urgency={req.urgency} />
-                    <span className="font-mono text-xs text-[#021734]/40">{req.id}</span>
-                  </div>
-                  <p className="font-semibold text-[#021734] text-sm">{req.bloodGroup} · {req.units} units needed</p>
-                  <p className="text-xs text-[#021734]/50 mt-1">{req.hospitalName} · {req.area}</p>
-                  {req.verifiedBy && <p className="text-xs text-[#036D7D] mt-0.5">✓ Verified by {req.verifiedBy}</p>}
-                </div>
-              </div>
-              <AnimatePresence>
-                {responded.includes(req.id) ? (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg">
-                    <CheckCircle size={14} />
-                    Response received — the hospital has been notified. Thank you.
-                  </motion.div>
-                ) : (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleAccept(req.id)}
-                      className="flex-1 py-2 bg-[#036D7D] text-white text-sm font-semibold rounded-lg hover:bg-[#057080] transition-colors flex items-center justify-center gap-2">
-                      <Heart size={14} /> I Can Help
-                    </button>
-                    <button className="px-4 py-2 border border-[#C0D2DE] text-[#021734]/60 text-sm rounded-lg hover:border-[#021734]/40 transition-colors">
-                      Not available
-                    </button>
-                  </div>
-                )}
-              </AnimatePresence>
-              <p className="text-[10px] text-[#021734]/30 mt-2 text-center">
-                Final eligibility is determined by medical professionals at the donation site.
+      <div className="w-full space-y-7 pb-8">
+        <section className="flex w-full flex-col gap-5 rounded-[20px] border border-[#FFD1D9] bg-[#FFF1F3] px-5 py-5 shadow-[0_4px_18px_rgba(3,26,54,0.04)] md:flex-row md:items-center md:justify-between md:gap-6 md:px-7 md:py-6">
+          <div className="flex min-w-0 items-start gap-4">
+            <span
+              aria-hidden="true"
+              className="mt-1 h-12 w-1 shrink-0 rounded-full bg-[#E51C3D]"
+            />
+            <div className="min-w-0">
+              <h1 className="font-display text-[28px] font-extrabold leading-tight tracking-tight text-[#031A36] sm:text-[30px] xl:text-[34px]">
+                Good{" "}
+                {new Date().getHours() < 12
+                  ? "morning"
+                  : new Date().getHours() < 17
+                    ? "afternoon"
+                    : "evening"}
+                , {donorName.split(" ")[0]} <span aria-hidden="true">👋</span>
+              </h1>
+              <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[#617587]">
+                Your readiness can help someone when they need it most.
               </p>
-            </motion.div>
-          ))}
-        </div>
+            </div>
+          </div>
+          <div className="relative grid min-w-0 grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 md:flex md:shrink-0 md:items-center">
+            <div className="flex min-w-0 items-center gap-2 rounded-xl border border-[#D8E3EA] bg-white px-3 py-2.5">
+              <MapPin size={15} className="text-[#E51C3D]" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-[#021734]">
+                  {city || "Location not set"}
+                </p>
+                <p
+                  className={`mt-0.5 flex items-center gap-1 text-[10px] font-semibold ${
+                    available ? "text-[#16A34A]" : "text-[#617587]"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      available ? "bg-[#16A34A]" : "bg-[#9AA9B5]"
+                    }`}
+                  />
+                  {available ? "Available" : "Unavailable"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-expanded={profileMenuOpen}
+              aria-label={`${donorName}, donor profile menu`}
+              onClick={() => setProfileMenuOpen((open) => !open)}
+              className="flex min-w-0 items-center gap-3 rounded-xl border border-[#F4C8CF] bg-[#FFF6F7] px-3 py-2.5 text-left transition-colors hover:bg-[#FFF1F3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E51C3D]"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E51C3D] font-display text-base font-extrabold text-white shadow-sm">
+                {donorName.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0">
+                <span className="block max-w-32 truncate text-xs font-bold text-[#021734]">
+                  {donorName}
+                </span>
+                <span className="block text-[10px] font-semibold text-[#C91836]">
+                  Donor
+                </span>
+              </span>
+              <ChevronDown
+                size={15}
+                className={`text-[#C91836] transition-transform ${
+                  profileMenuOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {profileMenuOpen && (
+              <div className="absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[#D8E3EA] bg-white p-2 shadow-[0_8px_24px_rgba(3,26,54,0.12)]">
+                <Link
+                  to="/donor/profile"
+                  onClick={() => setProfileMenuOpen(false)}
+                  className="block rounded-lg px-3 py-2 text-xs font-semibold text-[#062847] hover:bg-[#F5F8FA]"
+                >
+                  View profile
+                </Link>
+                <Link
+                  to="/donor/settings"
+                  onClick={() => setProfileMenuOpen(false)}
+                  className="block rounded-lg px-3 py-2 text-xs font-semibold text-[#062847] hover:bg-[#F5F8FA]"
+                >
+                  Donor settings
+                </Link>
+              </div>
+            )}
+          </div>
+        </section>
 
-        {/* Impact + info */}
-        <div className="space-y-4">
-          <div className="bg-[#021734] rounded-xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-4">Your Impact</h3>
-            <div className="grid grid-cols-2 gap-3">
+        <section
+          aria-label="Donor statistics"
+          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        >
+          <StatTile
+            label="Blood group"
+            value={bloodGroup}
+            note="Your registered blood group"
+            icon={Droplet}
+          />
+          <StatTile
+            label="Donation readiness"
+            value={available ? "READY" : "PAUSED"}
+            note={
+              available
+                ? "Available to be contacted"
+                : "Not visible to new requests"
+            }
+            icon={Activity}
+            tone={available ? "green" : "amber"}
+          />
+          <StatTile
+            label="Total donations"
+            value={String(donationCount).padStart(2, "0")}
+            note="Recorded contributions"
+            icon={Heart}
+            tone="navy"
+          />
+          <StatTile
+            label="Last donation"
+            value={
+              lastDonation === "Not recorded"
+                ? "Not recorded"
+                : formatDate(lastDonation)
+            }
+            note="Medical eligibility is confirmed at the donation site"
+            icon={CalendarDays}
+            tone="amber"
+          />
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+          <div className="rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-[0_2px_8px_rgba(3,26,54,0.035)] md:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#617587]">
+                  Live donor readiness
+                </p>
+                <div className="mt-3 flex items-center gap-2.5">
+                  <span
+                    className={`relative flex h-3 w-3 rounded-full ${
+                      available ? "bg-[#16A34A]" : "bg-[#9AA9B5]"
+                    }`}
+                  >
+                    <span
+                      className={`absolute inset-0 animate-ping rounded-full ${
+                        available ? "bg-[#16A34A]/45" : "hidden"
+                      }`}
+                    />
+                  </span>
+                  <h2 className="font-display text-xl font-extrabold text-[#031A36]">
+                    {available
+                      ? "AVAILABLE TO HELP"
+                      : availabilityMode === "temporary"
+                        ? "TEMPORARILY UNAVAILABLE"
+                        : "CURRENTLY UNAVAILABLE"}
+                  </h2>
+                </div>
+                <p className="mt-2 max-w-lg text-sm leading-relaxed text-[#617587]">
+                  {available
+                    ? "Verified requests matching your registered blood group can reach you."
+                    : "You won’t be shown to new matching requests until you update your availability."}
+                </p>
+              </div>
+              <span className="rounded-full bg-[#ECFDF3] px-3 py-1.5 text-[11px] font-semibold text-[#16803C]">
+                <ShieldCheck size={13} className="mr-1 inline" />
+                Verified coordination
+              </span>
+            </div>
+            <div className="mt-6 grid gap-4 border-t border-[#D8E3EA] pt-5 sm:grid-cols-3">
               {[
-                { label: "Lives potentially helped", value: `${me.donationsCount * 3}` },
-                { label: "Donation area", value: me.area || "Not available" },
-                { label: "Member since", value: "Not available" },
-                { label: "Coordination score", value: `${me.matchScore}%` },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-white/10 rounded-lg p-3">
-                  <p className="text-xl font-display font-bold text-white">{value}</p>
-                  <p className="text-xs text-white/40 mt-1">{label}</p>
+                ["Blood group", bloodGroup],
+                ["Last donation", formatDate(lastDonation)],
+                [
+                  "Visibility",
+                  available ? "Public to verified requests" : "Hidden",
+                ],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-[#617587]">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-[#021734]">
+                    {value}
+                  </p>
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-white/30 mt-3">Coordination score only — not medical eligibility.</p>
+            <div className="mt-5 rounded-xl bg-[#F5F8FA] p-4">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-[#062847]">
+                  Availability status
+                </span>
+                <span className="font-bold text-[#16A34A]">
+                  {available ? "Active" : "Paused"}
+                </span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#D8E3EA]">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    available ? "w-full bg-[#16A34A]" : "w-1/4 bg-[#9AA9B5]"
+                  }`}
+                />
+              </div>
+              <p className="mt-2 text-[10px] text-[#617587]">
+                This shows your contact availability, not medical eligibility.
+              </p>
+            </div>
+            <button
+              onClick={openAvailability}
+              className="mt-4 rounded-lg bg-[#E51C3D] px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#C91836] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E51C3D]"
+            >
+              Update availability
+            </button>
+            {savedUntil && available && (
+              <p className="mt-2 text-[11px] text-[#617587]">
+                Available until {formatDate(savedUntil)} (this session).
+              </p>
+            )}
           </div>
 
-          <div className="bg-white rounded-xl border border-[#C0D2DE]/60 p-5">
-            <h3 className="text-sm font-semibold text-[#021734] mb-3">Privacy Controls</h3>
-            <p className="text-xs text-[#021734]/50 leading-relaxed mb-3">
-              Your exact location is never displayed. Only your area and blood group are visible to verified organisations during active coordination.
+          <div className="overflow-hidden rounded-2xl bg-[#031A36] p-5 text-white md:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
+                  A little reminder
+                </p>
+                <h2 className="mt-2 font-display text-xl font-bold">
+                  One donation.
+                  <br />
+                  One more chance.
+                </h2>
+              </div>
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5 text-[#FF7184]">
+                <span className="absolute inset-1 animate-pulse rounded-full border border-[#E51C3D]/25" />
+                <Droplet
+                  size={24}
+                  fill="currentColor"
+                  className="animate-[pulse_4s_ease-in-out_infinite]"
+                />
+              </div>
+            </div>
+            <p className="mt-4 max-w-sm text-xs leading-relaxed text-white/65">
+              A verified request is a chance to make a meaningful connection.
+              Thank you for being part of your community.
             </p>
-            <Link to="/donor/privacy" className="text-xs text-[#036D7D] hover:underline font-medium flex items-center gap-1">
-              Manage privacy settings <ArrowRight size={11} />
-            </Link>
+            <div className="mt-5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-white/50">
+              <Heart size={12} className="text-[#FF7184]" /> The RakhtSetu
+              community
+            </div>
           </div>
-        </div>
+        </section>
+
+        <DonorImpactChart />
+
+        <section>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-lg font-bold text-[#021734]">
+                Emergency requests
+              </h2>
+              <p className="mt-1 text-xs text-[#617587]">
+                Verified requests that match your registered blood group.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <label className="sr-only" htmlFor="donor-blood-filter">
+                Filter by blood group
+              </label>
+              <select
+                id="donor-blood-filter"
+                value={bloodFilter}
+                onChange={(event) => setBloodFilter(event.target.value)}
+                className="rounded-lg border border-[#D8E3EA] bg-white px-3 py-2 text-xs text-[#062847] focus:border-[#E51C3D] focus:outline-none"
+              >
+                <option>All blood groups</option>
+                {bloodGroups.map((group) => (
+                  <option key={group}>{group}</option>
+                ))}
+              </select>
+              <label className="sr-only" htmlFor="donor-urgency-filter">
+                Filter by urgency
+              </label>
+              <select
+                id="donor-urgency-filter"
+                value={urgencyFilter}
+                onChange={(event) => setUrgencyFilter(event.target.value)}
+                className="rounded-lg border border-[#D8E3EA] bg-white px-3 py-2 text-xs text-[#062847] focus:border-[#E51C3D] focus:outline-none"
+              >
+                {["All urgency", "Urgent", "High", "Normal"].map((urgency) => (
+                  <option key={urgency}>{urgency}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {filteredRequests.length ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {filteredRequests.slice(0, 4).map((request) => (
+                <RequestCard
+                  key={request.id}
+                  request={request}
+                  responded={respondedIds.includes(request.id)}
+                  onDetails={setSelectedRequest}
+                  onHelp={setConfirmRequest}
+                  onDecline={(id) => setDeclinedIds((ids) => [...ids, id])}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[#D8E3EA] bg-white px-6 py-9 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#F5F8FA] text-[#617587]">
+                <CircleHelp size={19} />
+              </div>
+              <p className="mt-3 text-sm font-semibold text-[#021734]">
+                {hasBloodGroup
+                  ? "No matching active requests right now"
+                  : "Add your blood group to see matching requests"}
+              </p>
+              <p className="mt-1 text-xs text-[#617587]">
+                We’ll show verified needs when they’re available in your
+                network.
+              </p>
+            </div>
+          )}
+          <Link
+            to="/donor/emergency-requests"
+            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#E51C3D] hover:underline"
+          >
+            Browse all requests <ArrowRight size={13} />
+          </Link>
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+          <div className="rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-[0_2px_8px_rgba(3,26,54,0.035)]">
+            <SectionHeading
+              title="Nearby blood requests"
+              subtitle="A compact view of matching verified needs."
+              to="/donor/nearby"
+            />
+            <div className="relative mb-3">
+              <Search
+                size={15}
+                className="absolute left-3 top-2.5 text-[#9AA9B5]"
+              />
+              <label className="sr-only" htmlFor="nearby-request-search">
+                Search nearby hospitals or areas
+              </label>
+              <input
+                id="nearby-request-search"
+                value={nearbyQuery}
+                onChange={(event) => setNearbyQuery(event.target.value)}
+                placeholder="Search hospital or area"
+                className="w-full rounded-lg border border-[#D8E3EA] py-2 pl-9 pr-3 text-xs text-[#062847] outline-none placeholder:text-[#9AA9B5] focus:border-[#E51C3D]"
+              />
+            </div>
+            {nearbyRequests.length ? (
+              <div className="divide-y divide-[#D8E3EA]">
+                {nearbyRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-1"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#FFF1F3] text-xs font-extrabold text-[#E51C3D]">
+                        {request.bloodGroup}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-[#021734]">
+                          {request.hospitalName}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-[#617587]">
+                          {request.units}{" "}
+                          {request.units === 1 ? "unit" : "units"} ·{" "}
+                          {request.area}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-[#617587]">
+                        {distanceByArea[request.area] ?? "Nearby"}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-1 text-[9px] font-bold ${urgencyTone(request.urgency)}`}
+                      >
+                        {urgencyLabel[request.urgency]}
+                      </span>
+                      <button
+                        onClick={() => setSelectedRequest(request)}
+                        className="rounded-lg border border-[#D8E3EA] p-1.5 text-[#062847] hover:bg-[#F5F8FA]"
+                        aria-label={`View ${request.id} request`}
+                      >
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-7 text-center text-xs text-[#617587]">
+                No nearby requests match your filters.
+              </p>
+            )}
+          </div>
+          <div className="rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-[0_2px_8px_rgba(3,26,54,0.035)]">
+            <SectionHeading
+              title="Nearby network"
+              subtitle="Approximate preview · not live navigation"
+              to="/donor/network"
+            />
+            <NearbyMap location={area || city} />
+            <p className="mt-2 text-[10px] leading-relaxed text-[#617587]">
+              Markers are illustrative. Exact donor locations are never shown.
+            </p>
+          </div>
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-2">
+          <div className="rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-[0_2px_8px_rgba(3,26,54,0.035)]">
+            <SectionHeading
+              title="My responses"
+              subtitle="Follow the status of requests you’ve responded to."
+              to="/donor/responses"
+            />
+            {responses.length ? (
+              <div className="space-y-2">
+                {responses.slice(0, 3).map((response) => (
+                  <button
+                    key={response.id}
+                    onClick={() => setSelectedRequest(response)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#D8E3EA] p-3 text-left hover:bg-[#F5F8FA]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-xs font-bold text-[#021734]">
+                        {response.bloodGroup} · {response.hospitalName}
+                      </span>
+                      <span className="mt-1 block text-[11px] text-[#617587]">
+                        {response.units} units · {response.area}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-[#ECFDF3] px-2.5 py-1 text-[10px] font-bold text-[#16803C]">
+                      {response.status === "Fulfilled"
+                        ? "Completed"
+                        : "Response sent"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl bg-[#F5F8FA] p-5 text-center">
+                <UsersRound size={20} className="mx-auto text-[#9AA9B5]" />
+                <p className="mt-2 text-xs font-semibold text-[#062847]">
+                  No responses yet
+                </p>
+                <p className="mt-1 text-[11px] text-[#617587]">
+                  Your confirmed requests will appear here.
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-[0_2px_8px_rgba(3,26,54,0.035)]">
+            <SectionHeading
+              title="Donation history"
+              subtitle="A record of your past contributions."
+              to="/donor/history"
+            />
+            <div className="mb-3 rounded-md bg-[#F5F8FA] px-3 py-2 text-[10px] text-[#617587]">
+              Illustrative demo entries — connect donation records to show
+              verified personal history.
+            </div>
+            <div className="space-y-3">
+              {demoDonationHistory.map((entry) => (
+                <div key={entry.date} className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1F3] text-[#E51C3D]">
+                    <Droplet size={16} fill="currentColor" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-[#021734]">
+                      {entry.hospital}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-[#617587]">
+                      {formatDate(entry.date)} · {entry.bloodGroup} ·{" "}
+                      {entry.units} unit
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#ECFDF3] px-2 py-1 text-[9px] font-bold text-[#16803C]">
+                    {entry.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-[1.35fr_1fr]">
+          <div className="rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-[0_2px_8px_rgba(3,26,54,0.035)]">
+            <SectionHeading
+              title="Community network"
+              subtitle={`Aggregated ${bloodGroup} donor availability · no personal details`}
+              to="/donor/network"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                ["Ready", communityAvailable, "bg-[#ECFDF3] text-[#16803C]"],
+                ["Recently donated", "—", "bg-amber-50 text-amber-700"],
+                [
+                  "Unavailable",
+                  communityUnavailable,
+                  "bg-[#F5F8FA] text-[#617587]",
+                ],
+              ].map(([label, value, tone]) => (
+                <div key={label} className={`rounded-xl p-3 ${tone}`}>
+                  <p className="font-display text-2xl font-extrabold">
+                    {value}
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold">{label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center justify-between text-xs">
+              <span className="font-semibold text-[#062847]">
+                Network availability
+              </span>
+              <span className="font-bold text-[#062847]">
+                {networkAvailability}%
+              </span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#EAF0F5]">
+              <div
+                className="h-full rounded-full bg-[#16A34A] transition-[width]"
+                style={{ width: `${networkAvailability}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[10px] text-[#617587]">
+              Based on available donor records in the current network view.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[#D8E3EA] bg-white p-5 shadow-[0_2px_8px_rgba(3,26,54,0.035)]">
+            <SectionHeading
+              title="Rewards & impact"
+              subtitle="Every response strengthens the community."
+              to="/donor/rewards"
+              linkLabel="View rewards"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ["Total donations", donationCount],
+
+                ["Requests responded", responses.length],
+
+                [
+                  "Successful responses",
+                  requests.filter(
+                    (request) =>
+                      request.status === "Fulfilled" &&
+                      (respondedIds.includes(request.id) ||
+                        request.confirmedDonor === currentUser.id),
+                  ).length,
+                ],
+
+                ["Estimated community reach", `${reachedEstimate}*`],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg bg-[#F5F8FA] p-3">
+                  <p className="font-display text-xl font-extrabold text-[#031A36]">
+                    {value}
+                  </p>
+                  <p className="mt-1 text-[10px] leading-relaxed text-[#617587]">
+                    {label}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[9px] text-[#617587]">
+              *Estimate only; not a guaranteed patient count.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {donorRewards.map((reward) => (
+                <span
+                  key={reward.name}
+                  title={reward.description}
+                  className="inline-flex items-center gap-1 rounded-full border border-[#D8E3EA] px-2.5 py-1.5 text-[10px] font-semibold text-[#062847]"
+                >
+                  <Award size={12} className="text-[#E51C3D]" />
+                  {reward.name}
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 rounded-xl bg-[#FFF1F3] p-3">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-bold text-[#062847]">
+                  Next reward · Community Champion
+                </span>
+                <span className="font-bold text-[#E51C3D]">
+                  {Math.min(donationCount * 10, 100)}%
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                <div
+                  className="h-full rounded-full bg-[#E51C3D]"
+                  style={{ width: `${Math.min(donationCount * 10, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <p className="flex items-start gap-2 rounded-xl border border-[#D8E3EA] bg-white px-4 py-3 text-[10px] leading-relaxed text-[#617587]">
+          <CircleHelp size={14} className="mt-0.5 shrink-0" />
+          Availability is for coordination only. Donation eligibility and timing
+          are determined by qualified medical professionals. Your exact location
+          and private contact details are not displayed on this dashboard.
+        </p>
       </div>
+
+      {availabilityOpen && (
+        <ModalShell
+          title="Update your availability"
+          description="Choose how verified organisations can reach you. This setting can be changed at any time."
+          onClose={() => setAvailabilityOpen(false)}
+        >
+          <div className="space-y-2">
+            {([
+              [
+                "available",
+                "Available",
+                "Let verified requests matching my blood group reach me.",
+                "bg-[#16A34A]",
+              ],
+
+              [
+                "temporary",
+                "Temporarily unavailable",
+                "Pause new requests for now.",
+                "bg-amber-500",
+              ],
+
+              [
+                "unavailable",
+                "Not available",
+                "Hide my availability from new requests.",
+                "bg-[#9AA9B5]",
+              ],
+            ] as const).map(([value, label, details, dot]) => (
+              <button
+                key={value}
+                onClick={() => setAvailabilityChoice(value)}
+                className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
+                  availabilityChoice === value
+                    ? "border-[#E51C3D] bg-[#FFF1F3]/60"
+                    : "border-[#D8E3EA] hover:bg-[#F5F8FA]"
+                }`}
+              >
+                <span
+                  className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dot}`}
+                />
+                <span className="flex-1">
+                  <span className="block text-sm font-bold text-[#021734]">
+                    {label}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-[#617587]">
+                    {details}
+                  </span>
+                </span>
+                {availabilityChoice === value && (
+                  <Check size={16} className="mt-0.5 text-[#E51C3D]" />
+                )}
+              </button>
+            ))}
+          </div>
+          <label className="mt-4 block text-xs font-semibold text-[#062847]">
+            Available until / again on (optional)
+            <input
+              type="date"
+              value={savedUntil}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(event) => setSavedUntil(event.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-[#D8E3EA] px-3 py-2.5 text-sm font-normal text-[#062847] focus:border-[#E51C3D] focus:outline-none"
+            />
+          </label>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              onClick={() => setAvailabilityOpen(false)}
+              className="rounded-lg border border-[#D8E3EA] px-4 py-2.5 text-xs font-semibold text-[#617587] hover:bg-[#F5F8FA]"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveAvailability}
+              className="rounded-lg bg-[#E51C3D] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#C91836]"
+            >
+              Save status
+            </button>
+          </div>
+        </ModalShell>
+      )}
+
+      {confirmRequest && (
+        <ModalShell
+          title="Respond to this request?"
+          description="You’re letting the verified hospital and coordination team know you may be able to help."
+          onClose={() => setConfirmRequest(null)}
+        >
+          <div className="space-y-3 rounded-xl bg-[#F5F8FA] p-4 text-xs">
+            {[
+              ["Hospital", confirmRequest.hospitalName],
+              ["Blood group", confirmRequest.bloodGroup],
+              [
+                "Units",
+                `${confirmRequest.units} ${
+                  confirmRequest.units === 1 ? "unit" : "units"
+                }`,
+              ],
+              ["Location", `${confirmRequest.area}, ${city || "Mumbai"}`],
+            ].map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-3">
+                <span className="text-[#617587]">{label}</span>
+                <span className="text-right font-semibold text-[#021734]">
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[10px] leading-relaxed text-[#617587]">
+            Sending a response is not a medical eligibility confirmation. The
+            hospital will follow up with next steps.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmRequest(null)}
+              className="rounded-lg border border-[#D8E3EA] px-4 py-2.5 text-xs font-semibold text-[#617587] hover:bg-[#F5F8FA]"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmResponse}
+              className="rounded-lg bg-[#E51C3D] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#C91836]"
+            >
+              Confirm response
+            </button>
+          </div>
+        </ModalShell>
+      )}
+
+      {selectedRequest && (
+        <ModalShell
+          title={`${selectedRequest.bloodGroup} blood request`}
+          description={selectedRequest.hospitalName}
+          onClose={() => setSelectedRequest(null)}
+        >
+          <div className="space-y-3 rounded-xl bg-[#F5F8FA] p-4 text-xs">
+            {[
+              ["Request ID", selectedRequest.id],
+              ["Units needed", `${selectedRequest.units}`],
+              ["Urgency", urgencyLabel[selectedRequest.urgency]],
+              ["Location", `${selectedRequest.area}, ${city || "Mumbai"}`],
+              ["Status", selectedRequest.status],
+              [
+                "Verification",
+                selectedRequest.verifiedBy || "Verified request",
+              ],
+            ].map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-3">
+                <span className="text-[#617587]">{label}</span>
+                <span className="text-right font-semibold text-[#021734]">
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
+          {!respondedIds.includes(selectedRequest.id) && (
+            <button
+              onClick={() => {
+                setConfirmRequest(selectedRequest)
+                setSelectedRequest(null)
+              }}
+              className="mt-4 w-full rounded-lg bg-[#E51C3D] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#C91836]"
+            >
+              I can help
+            </button>
+          )}
+        </ModalShell>
+      )}
+      {toast && (
+        <motion.div
+          role="status"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-5 right-5 z-[70] rounded-xl bg-[#062847] px-4 py-3 text-sm font-semibold text-white shadow-xl"
+        >
+          {toast}
+        </motion.div>
+      )}
     </DashboardLayout>
-  );
+  )
 }
