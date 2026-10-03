@@ -27,6 +27,9 @@ import HospitalNotifications from "./pages/hospital/Notifications"
 import HospitalHistory from "./pages/hospital/History"
 
 import HospitalProfile from "./pages/hospital/Profile"
+import HospitalPatients from "./pages/hospital/Patients"
+import HospitalReports from "./pages/hospital/Reports"
+import HospitalSettings from "./pages/hospital/Settings"
 
 // NGO
 
@@ -132,6 +135,38 @@ function AppRoutes() {
         element={
           <ProtectedRoute role="hospital">
             <HospitalRequests />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/hospital/post-request"
+        element={
+          <ProtectedRoute role="hospital">
+            <HospitalRequests />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/hospital/patients"
+        element={
+          <ProtectedRoute role="hospital">
+            <HospitalPatients />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/hospital/reports"
+        element={
+          <ProtectedRoute role="hospital">
+            <HospitalReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/hospital/settings"
+        element={
+          <ProtectedRoute role="hospital">
+            <HospitalSettings />
           </ProtectedRoute>
         }
       />
