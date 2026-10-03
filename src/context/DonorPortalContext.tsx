@@ -10,6 +10,7 @@ import React, {
 import { useApp } from "./AppContext"
 
 import type { BloodGroup } from "../data/mockData"
+import { supabase } from "../lib/supabase"
 
 export type DonorResponseStatus = "Response Sent" | "Hospital Confirmed" | "Coordination in Progress" | "Completed" | "Cancelled"
 export type DonorAvailabilityStatus = "available" | "temporary" | "unavailable"
@@ -79,9 +80,12 @@ interface DonorPortalContextValue extends DonorPortalData {
     status?: DonorAvailabilityStatus,
   ) => void
 
-  recordResponse: (requestId: string) => void
+  recordResponse: (requestId: string) => Promise<void>
 
-  updateResponse: (requestId: string, status: DonorResponseStatus) => void
+  updateResponse: (
+    requestId: string,
+    status: DonorResponseStatus,
+  ) => Promise<void>
 
   updateProfile: (profile: DonorProfileEdits) => void
 
@@ -202,33 +206,67 @@ export function DonorPortalProvider({ children }: { children: ReactNode }) {
           availabilityUntil: until,
         })),
 
-      recordResponse: (requestId) =>
-        setData((current) =>
-          current.responses.some((response) => response.requestId === requestId)
-            ? current
-            : {
-                ...current,
-                responses: [
-                  {
-                    requestId,
-                    status: "Response Sent",
-                    updatedAt: new Date().toISOString(),
-                  },
-                  ...current.responses,
-                ],
-              },
-        ),
-
-      updateResponse: (requestId, status) =>
+      recordResponse: async (requestId) => {
+        if (!currentUser?.id)
+          throw new Error("Sign in to respond to a blood request.")
+        const respondedAt = new Date().toISOString()
+        const { error } = await supabase.from("donor_responses").upsert(
+          {
+            request_id: requestId,
+            donor_id: currentUser.id,
+            status: "Response Sent",
+            responded_at: respondedAt,
+            updated_at: respondedAt,
+          },
+          { onConflict: "request_id,donor_id" },
+        )
+        if (error) throw error
         setData((current) => ({
           ...current,
+          responses: [
+            { requestId, status: "Response Sent", updatedAt: respondedAt },
+            ...current.responses.filter(
+              (response) => response.requestId !== requestId,
+            ),
+          ],
+        }))
+      },
 
+      updateResponse: async (requestId, status) => {
+        if (!currentUser?.id)
+          throw new Error("Sign in to update your response.")
+        const updatedAt = new Date().toISOString()
+        const previousResponse = data.responses.find(
+          (response) => response.requestId === requestId,
+        )
+        const { data: updatedRows, error } = await supabase
+          .from("donor_responses")
+          .update({ status, updated_at: updatedAt })
+          .eq("request_id", requestId)
+          .eq("donor_id", currentUser.id)
+          .select("id")
+        if (error) throw error
+        if (!updatedRows?.length) {
+          const { error: insertError } = await supabase
+            .from("donor_responses")
+            .insert({
+              request_id: requestId,
+              donor_id: currentUser.id,
+              status,
+              responded_at: previousResponse?.updatedAt ?? updatedAt,
+              updated_at: updatedAt,
+            })
+          if (insertError) throw insertError
+        }
+        setData((current) => ({
+          ...current,
           responses: current.responses.map((response) =>
             response.requestId === requestId
-              ? { ...response, status, updatedAt: new Date().toISOString() }
+              ? { ...response, status, updatedAt }
               : response,
           ),
-        })),
+        }))
+      },
 
       updateProfile: (profile) =>
         setData((current) => ({
@@ -281,7 +319,7 @@ export function DonorPortalProvider({ children }: { children: ReactNode }) {
         return newlyEarned
       },
     }),
-    [data, loadedUserId, userId],
+    [data, loadedUserId, userId, currentUser?.id],
   )
 
   return (

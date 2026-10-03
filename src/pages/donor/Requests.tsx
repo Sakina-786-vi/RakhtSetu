@@ -232,12 +232,20 @@ export function DonorRequestWorkspace({
     ],
   )
 
-  const respond = () => {
+  const respond = async () => {
     if (!confirm) return
 
-    updateRequestStatus(confirm.id, "Donor Confirmed")
-
-    recordResponse(confirm.id)
+    try {
+      await recordResponse(confirm.id)
+      updateRequestStatus(confirm.id, "Donor Confirmed")
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Unable to send your response.",
+      )
+      return
+    }
 
     setToast("Response sent. The hospital has been notified.")
 

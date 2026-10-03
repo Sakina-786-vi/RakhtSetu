@@ -593,11 +593,20 @@ export default function DonorDashboard() {
     setAvailabilityOpen(false)
   }
 
-  const confirmResponse = () => {
+  const confirmResponse = async () => {
     if (!confirmRequest) return
 
-    updateRequestStatus(confirmRequest.id, "Donor Confirmed")
-    donorPortal.recordResponse(confirmRequest.id)
+    try {
+      await donorPortal.recordResponse(confirmRequest.id)
+      updateRequestStatus(confirmRequest.id, "Donor Confirmed")
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Unable to send your response.",
+      )
+      return
+    }
 
     setToast("Your response was sent to the hospital.")
     window.setTimeout(() => setToast(""), 3500)
@@ -610,93 +619,114 @@ export default function DonorDashboard() {
   return (
     <DashboardLayout>
       <div className="w-full space-y-7 pb-8">
-        <section className="flex w-full flex-col gap-5 rounded-[20px] border border-[#FFD1D9] bg-[#FFF1F3] px-5 py-5 shadow-[0_4px_18px_rgba(3,26,54,0.04)] md:flex-row md:items-center md:justify-between md:gap-6 md:px-7 md:py-6">
-          <div className="flex min-w-0 items-start gap-4">
-            <span
-              aria-hidden="true"
-              className="mt-1 h-12 w-1 shrink-0 rounded-full bg-[#E51C3D]"
-            />
-            <div className="min-w-0">
-              <h1 className="font-display text-[28px] font-extrabold leading-tight tracking-tight text-[#031A36] sm:text-[30px] xl:text-[34px]">
-                Good{" "}
-                {new Date().getHours() < 12
-                  ? "morning"
-                  : new Date().getHours() < 17
-                    ? "afternoon"
-                    : "evening"}
-                , {donorName.split(" ")[0]} <span aria-hidden="true">👋</span>
-              </h1>
-              <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[#617587]">
-                Your readiness can help someone when they need it most.
-              </p>
-            </div>
-          </div>
-          <div className="relative grid min-w-0 grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 md:flex md:shrink-0 md:items-center">
-            <div className="flex min-w-0 items-center gap-2 rounded-xl border border-[#D8E3EA] bg-white px-3 py-2.5">
-              <MapPin size={15} className="text-[#E51C3D]" />
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-[#021734]">
-                  {city || "Location not set"}
-                </p>
-                <p
-                  className={`mt-0.5 flex items-center gap-1 text-[10px] font-semibold ${
-                    available ? "text-[#16A34A]" : "text-[#617587]"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      available ? "bg-[#16A34A]" : "bg-[#9AA9B5]"
-                    }`}
-                  />
-                  {available ? "Available" : "Unavailable"}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              aria-expanded={profileMenuOpen}
-              aria-label={`${donorName}, donor profile menu`}
-              onClick={() => setProfileMenuOpen((open) => !open)}
-              className="flex min-w-0 items-center gap-3 rounded-xl border border-[#F4C8CF] bg-[#FFF6F7] px-3 py-2.5 text-left transition-colors hover:bg-[#FFF1F3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E51C3D]"
-            >
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E51C3D] font-display text-base font-extrabold text-white shadow-sm">
-                {donorName.slice(0, 1).toUpperCase()}
-              </span>
-              <span className="min-w-0">
-                <span className="block max-w-32 truncate text-xs font-bold text-[#021734]">
-                  {donorName}
-                </span>
-                <span className="block text-[10px] font-semibold text-[#C91836]">
-                  Donor
-                </span>
-              </span>
-              <ChevronDown
-                size={15}
-                className={`text-[#C91836] transition-transform ${
-                  profileMenuOpen ? "rotate-180" : ""
-                }`}
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.9fr)]">
+          <section className="flex w-full min-w-0 flex-col gap-5 rounded-[20px] border border-[#FFD1D9] bg-[#FFF1F3] px-5 py-5 shadow-[0_4px_18px_rgba(3,26,54,0.04)] md:flex-row md:items-center md:justify-between md:gap-6 md:px-7 md:py-6">
+            <div className="flex min-w-0 items-start gap-4">
+              <span
+                aria-hidden="true"
+                className="mt-1 h-12 w-1 shrink-0 rounded-full bg-[#E51C3D]"
               />
-            </button>
-            {profileMenuOpen && (
-              <div className="absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[#D8E3EA] bg-white p-2 shadow-[0_8px_24px_rgba(3,26,54,0.12)]">
-                <Link
-                  to="/donor/profile"
-                  onClick={() => setProfileMenuOpen(false)}
-                  className="block rounded-lg px-3 py-2 text-xs font-semibold text-[#062847] hover:bg-[#F5F8FA]"
-                >
-                  View profile
-                </Link>
-                <Link
-                  to="/donor/settings"
-                  onClick={() => setProfileMenuOpen(false)}
-                  className="block rounded-lg px-3 py-2 text-xs font-semibold text-[#062847] hover:bg-[#F5F8FA]"
-                >
-                  Donor settings
-                </Link>
+              <div className="min-w-0">
+                <h1 className="font-display text-[28px] font-extrabold leading-tight tracking-tight text-[#031A36] sm:text-[30px] xl:text-[34px]">
+                  Good{" "}
+                  {new Date().getHours() < 12
+                    ? "morning"
+                    : new Date().getHours() < 17
+                      ? "afternoon"
+                      : "evening"}
+                  , {donorName.split(" ")[0]} <span aria-hidden="true">👋</span>
+                </h1>
+                <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[#617587]">
+                  Your readiness can help someone when they need it most.
+                </p>
               </div>
-            )}
-          </div>
-        </section>
+            </div>
+            <div className="relative grid min-w-0 grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 md:flex md:shrink-0 md:items-center">
+              <div className="flex min-w-0 items-center gap-2 rounded-xl border border-[#D8E3EA] bg-white px-3 py-2.5">
+                <MapPin size={15} className="text-[#E51C3D]" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-[#021734]">
+                    {city || "Location not set"}
+                  </p>
+                  <p
+                    className={`mt-0.5 flex items-center gap-1 text-[10px] font-semibold ${
+                      available ? "text-[#16A34A]" : "text-[#617587]"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        available ? "bg-[#16A34A]" : "bg-[#9AA9B5]"
+                      }`}
+                    />
+                    {available ? "Available" : "Unavailable"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-expanded={profileMenuOpen}
+                aria-label={`${donorName}, donor profile menu`}
+                onClick={() => setProfileMenuOpen((open) => !open)}
+                className="flex min-w-0 items-center gap-3 rounded-xl border border-[#F4C8CF] bg-[#FFF6F7] px-3 py-2.5 text-left transition-colors hover:bg-[#FFF1F3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E51C3D]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E51C3D] font-display text-base font-extrabold text-white shadow-sm">
+                  {donorName.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block max-w-32 truncate text-xs font-bold text-[#021734]">
+                    {donorName}
+                  </span>
+                  <span className="block text-[10px] font-semibold text-[#C91836]">
+                    Donor
+                  </span>
+                </span>
+                <ChevronDown
+                  size={15}
+                  className={`text-[#C91836] transition-transform ${
+                    profileMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {profileMenuOpen && (
+                <div className="absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[#D8E3EA] bg-white p-2 shadow-[0_8px_24px_rgba(3,26,54,0.12)]">
+                  <Link
+                    to="/donor/profile"
+                    onClick={() => setProfileMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-xs font-semibold text-[#062847] hover:bg-[#F5F8FA]"
+                  >
+                    View profile
+                  </Link>
+                  <Link
+                    to="/donor/settings"
+                    onClick={() => setProfileMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-xs font-semibold text-[#062847] hover:bg-[#F5F8FA]"
+                  >
+                    Donor settings
+                  </Link>
+                </div>
+              )}
+            </div>
+          </section>
+          <section
+            aria-label="Donor inspiration video"
+            className="relative aspect-video min-w-0 overflow-hidden rounded-2xl border border-[#D8E3EA] bg-[#031A36] shadow-[0_8px_24px_rgba(3,26,54,0.12)] xl:aspect-auto xl:min-h-[190px]"
+          >
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              className="absolute inset-0 h-full w-full object-cover"
+            >
+              <source src="/sounds/donor.mp4" type="video/mp4" />
+            </video>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#031A36]/30 via-transparent to-transparent"
+            />
+          </section>
+        </div>
 
         <section
           aria-label="Donor statistics"
