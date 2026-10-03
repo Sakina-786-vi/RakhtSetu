@@ -76,10 +76,19 @@ export default function DonorResponses() {
     [requests, responses, tab],
   )
 
-  const withdraw = () => {
+  const withdraw = async () => {
     if (!withdrawing) return
 
-    updateResponse(withdrawing, "Cancelled")
+    try {
+      await updateResponse(withdrawing, "Cancelled")
+    } catch (error) {
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Unable to withdraw your response.",
+      )
+      return
+    }
 
     updateRequestStatus(withdrawing, "Donors Contacted")
 
