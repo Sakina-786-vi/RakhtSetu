@@ -86,6 +86,8 @@ flowchart TD
     H --> I["🚨 Faster Request Coordination"]
     H --> J["🤝 Better Donor Connectivity"]
     H --> K["❤️ Stronger Community Network"]
+```
+
 ---
 
 # 🏗️ System Architecture
@@ -121,6 +123,34 @@ flowchart LR
 
     REQ --> OUT["❤️ Blood Donation Coordination"]
     RES --> OUT
+```
+
+---
+
+# 🩸 Blood Request Flow
+
+```mermaid
+flowchart TD
+
+    A["🏥 Hospital Creates Blood Request"]
+    A --> B["🩸 Select Blood Group"]
+    B --> C["📦 Enter Required Units"]
+    C --> D["📍 Specify Location"]
+    D --> E["⚙️ RakhtSetu Processes Request"]
+
+    E --> F["🔎 Find Suitable Donors"]
+
+    F --> G["📨 Send Blood Request"]
+
+    G --> H{"👤 Donor Response"}
+
+    H -->|Accept| I["✅ Donation Coordination"]
+    H -->|Decline| J["❌ Request Reassignment"]
+
+    I --> K["🏥 Hospital Receives Donor Response"]
+    J --> F
+
+    K --> L["❤️ Blood Donation Completed"]
 ```
 
 ---
@@ -165,47 +195,30 @@ flowchart LR
 
 # ✨ Key Features
 
-## 🩸 Donor Dashboard
-
-- Donor profile management
-- Blood group and location information
-- Availability management
-- Blood request management
-- Donor response system
-- Donation history
-- Nearby donor/network features
-- Notifications
-- Rewards and recognition
-- Donor badges
-- Impact tracking
-
----
-
-## 🏥 Hospital Dashboard
-
-- Hospital dashboard
-- Blood request management
-- Patient management
-- Interactive donor map
-- Donor coordination
-- Request tracking
-- Reports and analytics
-- Hospital settings
-- Hospital operations database
-- Map-based donor visualization
-
----
-
-## 🤝 NGO Dashboard
-
-- NGO dashboard
-- Community blood donation coordination
-- Donor-hospital connectivity
-- Community outreach support
-- NGO-specific dashboard interface
-
----
-
+| 🩸 Module | 🔹 Feature | 📝 Description |
+|---|---|---|
+| 🩸 **Donor Dashboard** | Profile Management | Manage donor profile, blood group and location |
+| 🩸 **Donor Dashboard** | Availability Management | Update donor availability status |
+| 🩸 **Donor Dashboard** | Blood Requests | View and manage incoming blood requests |
+| 🩸 **Donor Dashboard** | Response System | Accept or decline blood donation requests |
+| 🩸 **Donor Dashboard** | Donation History | Track previous blood donation activities |
+| 🩸 **Donor Dashboard** | Nearby Network | Access nearby donor/network information |
+| 🩸 **Donor Dashboard** | Notifications | Receive important request and platform notifications |
+| 🩸 **Donor Dashboard** | Rewards & Recognition | Recognition through rewards and achievements |
+| 🩸 **Donor Dashboard** | Badges | Display donor achievement badges |
+| 🩸 **Donor Dashboard** | Impact Tracking | Track personal contribution and donation impact |
+| 🏥 **Hospital Dashboard** | Blood Request Management | Create and manage blood requirements |
+| 🏥 **Hospital Dashboard** | Patient Management | Manage patient-related information |
+| 🏥 **Hospital Dashboard** | Interactive Donor Map | View donors through an interactive map |
+| 🏥 **Hospital Dashboard** | Donor Coordination | Coordinate with suitable donors |
+| 🏥 **Hospital Dashboard** | Request Tracking | Track blood requests and donor responses |
+| 🏥 **Hospital Dashboard** | Reports & Analytics | View operational reports and analytics |
+| 🏥 **Hospital Dashboard** | Hospital Settings | Manage hospital dashboard settings |
+| 🏥 **Hospital Dashboard** | Operations Database | Manage hospital operational data |
+| 🏥 **Hospital Dashboard** | Map Visualization | Visualize donor locations on the map |
+| 🤝 **NGO Dashboard** | NGO Dashboard | Dedicated dashboard for NGO activities |
+| 🤝 **NGO Dashboard** | Donation Coordination | Support community blood donation coordination |
+| 🤝 **NGO Dashboard** | Donor-Hospital Connectivity | Help connect donors and hospitals |
 # 🧩 Core Modules
 
 ```text
@@ -247,37 +260,25 @@ RakhtSetu
 
 # 🛠️ Technology Stack
 
-## Frontend
-
-- **React**
-- **TypeScript**
-- **Vite**
-- **Tailwind CSS**
-- **React Router**
-- **Framer Motion**
-- **Lucide React**
-
-## Backend & Database
-
-- **Supabase**
-- **PostgreSQL**
-- **Supabase Authentication**
-- **Row Level Security**
-
-## Maps & Location
-
-- **Leaflet**
-- **Leaflet MarkerCluster**
-
-## Development Tools
-
-- **Git**
-- **GitHub**
-- **npm / pnpm**
-- **VS Code**
-
----
-
+| 🧩 Category | ⚙️ Technology | 🎯 Purpose |
+|---|---|---|
+| 🎨 **Frontend** | React | Building the interactive user interface |
+| 🎨 **Frontend** | TypeScript | Type-safe application development |
+| ⚡ **Build Tool** | Vite | Fast development and production build |
+| 🎨 **Styling** | Tailwind CSS | Responsive and modern UI design |
+| 🧭 **Routing** | React Router | Client-side navigation and route management |
+| ✨ **Animations** | Framer Motion | Smooth UI animations and transitions |
+| 🖼️ **Icons** | Lucide React | Consistent interface icons |
+| ☁️ **Backend / BaaS** | Supabase | Backend services and application data |
+| 🗄️ **Database** | PostgreSQL | Structured application data storage |
+| 🔐 **Authentication** | Supabase Auth | User authentication and access management |
+| 🛡️ **Security** | Row Level Security | Database-level access control |
+| 🗺️ **Maps** | Leaflet | Interactive map integration |
+| 📍 **Location Visualization** | Leaflet MarkerCluster | Efficient visualization of multiple map markers |
+| 🔧 **Version Control** | Git | Source code version control |
+| 🌐 **Repository** | GitHub | Code hosting and collaboration |
+| 📦 **Package Manager** | npm / pnpm | Dependency and package management |
+| 💻 **Development Environment** | VS Code | Application development and debugging |
 # 🔐 Security
 
 RakhtSetu uses role-based access and database-level security mechanisms to separate functionality between different platform users.
