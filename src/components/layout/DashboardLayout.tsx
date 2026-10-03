@@ -1,16 +1,37 @@
 import React from "react"
 
+import { useLocation } from "react-router-dom"
+
 import Sidebar from "./Sidebar"
+import { useApp } from "../../context/AppContext"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const { role } = useApp()
+  const location = useLocation()
+  const hospitalDashboard =
+    role === "hospital" && location.pathname === "/hospital/dashboard"
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#F7F9FC]">
       <Sidebar />
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main
+        className="min-w-0 flex-1 overflow-y-auto"
+        style={
+          hospitalDashboard
+            ? {
+                backgroundImage:
+                  "linear-gradient(rgba(248,250,252,0.90), rgba(248,250,252,0.90)), url('/sounds/hospital.jpg')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundAttachment: "fixed",
+              }
+            : undefined
+        }
+      >
         <div className="min-h-full p-6 pt-14 md:p-8">{children}</div>
       </main>
     </div>
